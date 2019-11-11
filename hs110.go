@@ -29,7 +29,8 @@ func NewPlug(addr string) (*Plug, error) {
 		mutex:   &sync.Mutex{},
 	}
 
-	conn, err := net.Dial("tcp", plug.address)
+	// connect to plug with 5 second timeout
+	conn, err := net.DialTimeout("tcp", plug.address, time.Second*5)
 	if err != nil {
 		return plug, err
 	}
