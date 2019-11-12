@@ -11,13 +11,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Plug represents an HS110 plug, and exposes various functions for interacting
+// Plug represents an HS110 plug, and exposes various methods for interacting
 // with it.
 type Plug struct {
 	address string
 	timeout time.Duration
-	conn    net.Conn
-	mutex   *sync.Mutex
+	mtx     *sync.Mutex
 	lastCmd time.Time
 }
 
@@ -26,25 +25,13 @@ func NewPlug(addr string) (*Plug, error) {
 	plug := &Plug{
 		address: addr + ":9999",
 		timeout: time.Second * 5,
-		mutex:   &sync.Mutex{},
+		mtx:     &sync.Mutex{},
 	}
-
-	// connect to plug with 5 second timeout
-	conn, err := net.DialTimeout("tcp", plug.address, time.Second*5)
-	if err != nil {
-		return plug, err
-	}
-	plug.conn = conn
 
 	if _, err := plug.Status(); err != nil {
 		return plug, fmt.Errorf("talking to plug: %w", err)
 	}
 	return plug, nil
-}
-
-// Close should be defered whenever a plug is initialized.
-func (p *Plug) Close() {
-	p.conn.Close()
 }
 
 // On turns on the plug.
@@ -58,11 +45,13 @@ func (p *Plug) Off() error {
 }
 
 func (p *Plug) setState(state bool) error {
-	var cmd = `{"system": {"set_relay_state": {"state": %d}}}`
+	cmd := `{"system": {"set_relay_state": {"state": %d}}}`
 	if state {
 		cmd = fmt.Sprintf(cmd, 1)
+		log.Debug("turning on plug")
 	} else {
 		cmd = fmt.Sprintf(cmd, 0)
+		log.Debug("turning off plug")
 	}
 
 	// send the command, get the response
@@ -93,35 +82,41 @@ func (p *Plug) setState(state bool) error {
 // sendCmd handles the communication with the plug.
 func (p *Plug) sendCmd(cmd string) ([]byte, error) {
 	// protect against sending too many commands at once
-	p.mutex.Lock()
+	p.mtx.Lock()
 	defer func() {
-		p.mutex.Unlock()
 		p.lastCmd = time.Now()
+		p.mtx.Unlock()
 	}()
-	if time.Since(p.lastCmd) < time.Second {
-		time.Sleep(time.Second)
+	if time.Since(p.lastCmd) < time.Millisecond*500 {
+		time.Sleep(time.Millisecond * 500)
 	}
 
 	res := make([]byte, 2048)
+
+	// connect to plug
+	conn, err := net.DialTimeout("tcp", p.address, p.timeout)
+	if err != nil {
+		return res, fmt.Errorf("connecting to plug: %w", err)
+	}
+	defer conn.Close()
+
 	// set timeout
-	if err := p.conn.SetDeadline(time.Now().Add(p.timeout)); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(p.timeout)); err != nil {
 		return res, fmt.Errorf("setting timeout: %w", err)
 	}
 
 	// encrypt payload, write data
-	log.Debugf("sendCmd sending: %s", cmd)
 	payload := encrypt([]byte(cmd))
-	if _, err := p.conn.Write(payload); err != nil {
+	if _, err := conn.Write(payload); err != nil {
 		return res, fmt.Errorf("writing payload: %w", err)
 	}
 
 	// receive, decrypt response
-	i, err := p.conn.Read(res)
+	i, err := conn.Read(res)
 	if err != nil {
 		return res, err
 	}
 	decrypted := decrypt(res[:i]) // only include the bytes that were read
-	log.Debugf("sendCmd got response: %s", decrypted)
 	return decrypted, nil
 }
 
