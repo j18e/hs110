@@ -21,17 +21,12 @@ type Plug struct {
 }
 
 // NewPlug initializes and tests the connection to a plug.
-func NewPlug(addr string) (*Plug, error) {
-	plug := &Plug{
+func NewPlug(addr string) *Plug {
+	return &Plug{
 		address: addr + ":9999",
 		timeout: time.Second * 5,
 		mtx:     &sync.Mutex{},
 	}
-
-	if _, err := plug.Status(); err != nil {
-		return plug, fmt.Errorf("talking to plug: %w", err)
-	}
-	return plug, nil
 }
 
 // On turns on the plug.
