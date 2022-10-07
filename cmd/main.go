@@ -38,10 +38,13 @@ func main() {
 		} else {
 			fmt.Println("plug is off")
 		}
+	case "energy":
+		readout, err := plug.Energy()
+		check(err)
+		fmt.Println(readout)
 	default:
 		log.Fatal("valid args [on off]")
 	}
-	fmt.Println("done")
 }
 
 func check(err error) {
