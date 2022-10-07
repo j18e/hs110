@@ -40,12 +40,12 @@ func (p *Plug) Off() error {
 }
 
 func (p *Plug) setState(state bool) error {
-	cmd := `{"system": {"set_relay_state": {"state": %d}}}`
+	var cmd Cmd
 	if state {
-		cmd = fmt.Sprintf(cmd, 1)
+		cmd = cmdOn
 		log.Debug("turning on plug")
 	} else {
-		cmd = fmt.Sprintf(cmd, 0)
+		cmd = cmdOff
 		log.Debug("turning off plug")
 	}
 
@@ -75,7 +75,7 @@ func (p *Plug) setState(state bool) error {
 }
 
 // sendCmd handles the communication with the plug.
-func (p *Plug) sendCmd(cmd string) ([]byte, error) {
+func (p *Plug) sendCmd(cmd Cmd) ([]byte, error) {
 	// protect against sending too many commands at once
 	p.mtx.Lock()
 	defer func() {
@@ -121,7 +121,7 @@ func encrypt(bx []byte) []byte {
 	res := make([]byte, 4)
 	binary.BigEndian.PutUint32(res, uint32(len(bx))) // equivalent in python: struct.pack('>I', len(cmd))
 
-	for i, _ := range bx {
+	for i := range bx {
 		b := key ^ int(bx[i])
 		key = b
 		res = append(res, byte(b))
