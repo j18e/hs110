@@ -11,17 +11,17 @@ import (
 
 func main() {
 	addr := flag.String("address", "", "ip address of the hs110 plug")
+	debug := flag.Bool("debug", false, "log at debug level")
 	flag.Parse()
 
 	if *addr == "" {
 		log.Fatal("required flag -address")
 	}
-
-	// log.SetLevel(log.DebugLevel)
-	plug, err := hs110.NewPlug(*addr)
-	if err != nil {
-		log.Fatal(err)
+	if *debug {
+		log.SetLevel(log.DebugLevel)
 	}
+
+	plug := hs110.NewPlug(*addr)
 
 	switch flag.Arg(0) {
 	case "on":
